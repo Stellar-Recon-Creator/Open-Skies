@@ -29,3 +29,7 @@ A 3D flight simulator that runs in a web browser. You fly a Cessna 182T Skylane 
 | X | Sound |
 | P | Pause |
 | R | Restart on the runway |
+
+## Older versions
+
+The `blue-yonder-vN-backup.html` files are snapshots of the game from earlier in its making (v1 is the very first version). Each one is a complete, playable copy.
