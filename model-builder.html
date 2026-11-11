@@ -1,0 +1,207 @@
+<title>Open Skies Workshop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono&display=swap">
+<style>
+/* layout: a hangar workbench. One screen: tool bar on top, shape bin on the left, the model on the bench in the middle, the selected part's measurements on the right. On a phone the three stack. */
+:root{color-scheme:dark;--bench:#16212b;--panel:#1d2b37;--raise:#27394a;--line:#35495c;--ink:#e9f0f5;--dim:#9db0c0;--blue:#4aa3ff;--amber:#ffb84a;--red:#ff6b5e;
+  --ui:'B612',system-ui,sans-serif;--mono:'B612 Mono',ui-monospace,monospace}
+html,body{height:100%}
+body{background:var(--bench);color:var(--ink);font:14px/1.4 var(--ui);display:flex;flex-direction:column;padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+button,select,input,textarea{font:inherit;color:inherit}
+button{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
+button:hover{border-color:var(--blue)}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+button.on{background:var(--blue);border-color:var(--blue);color:#06131f;font-weight:700}
+button.warn{border-color:var(--red);color:var(--red)}
+select,input[type=text],input[type=number],textarea{background:#0f1820;border:1px solid var(--line);border-radius:6px;padding:5px 7px;min-width:0}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+.bar h1{font-size:16px;margin:0 8px 0 0;letter-spacing:.02em}.bar h1 em{font-style:normal;color:var(--amber)}
+.bar .sp{flex:1}
+#mName{width:150px}
+.work{flex:1;min-height:0;display:grid;grid-template-columns:150px minmax(0,1fr) 290px}
+.side{background:var(--panel);overflow:auto;padding:10px 16px}
+.side h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:12px 0 6px}.side h2:first-child{margin-top:0}
+#shapes{display:grid;grid-template-columns:1fr 1fr;gap:6px}#shapes button{padding:8px 2px;font-size:12px}
+#view{position:relative;min-height:260px;overflow:hidden}
+#view canvas{display:block;width:100%;height:100%;touch-action:none}
+.modes{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.hint{position:absolute;left:10px;bottom:8px;right:10px;font-size:12px;color:var(--dim);pointer-events:none;text-shadow:0 1px 2px #000}
+.row{display:grid;grid-template-columns:44px repeat(3,minmax(0,1fr));gap:5px;align-items:center;margin-bottom:5px}
+.row span{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.row input{width:100%;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;padding:5px 4px}.row input[type=number]{-moz-appearance:textfield;appearance:textfield}.row input::-webkit-outer-spin-button,.row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.sw{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}.sw button{width:22px;height:22px;padding:0;border-radius:50%}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+#list{list-style:none;margin:0;padding:0;font-size:12px}#list li{padding:4px 6px;border-radius:5px;cursor:pointer;display:flex;gap:6px;align-items:center}
+#list li.sel{background:var(--raise);outline:1px solid var(--blue)}#list i{width:10px;height:10px;border-radius:2px;flex:none}
+#none{color:var(--dim);font-size:13px}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;max-width:min(560px,92vw);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.55)}dialog h3{margin:0 0 8px}dialog p{color:var(--dim);margin:6px 0}
+dialog textarea{width:100%;height:150px;font-family:var(--mono);font-size:11px}
+#msg{font-size:12px;color:var(--amber);min-height:1em}
+@media (max-width:820px){.work{grid-template-columns:1fr;grid-template-rows:auto minmax(300px,55vh) auto;overflow:auto}#shapes{grid-template-columns:repeat(4,1fr)}.side{overflow:visible;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}}
+</style>
+<div class="bar">
+  <h1>Open Skies <em>Workshop</em></h1>
+  <input id="mName" type="text" maxlength="30" aria-label="Model name">
+  <select id="mKind" aria-label="What this model is"><option value="plane">Plane</option><option value="building">Building</option><option value="other">Other</option></select>
+  <button id="bSave" type="button">Save</button>
+  <select id="mSlots" aria-label="My saved models"></select>
+  <button id="bDel" type="button" class="warn">Delete saved</button>
+  <span class="sp"></span>
+  <button id="bNew" type="button">Start from…</button>
+  <button id="bImport" type="button">Paste code</button>
+  <button id="bExport" type="button" class="on">Copy code for the game</button>
+</div>
+<div class="work">
+  <div class="side">
+    <h2>Add a shape</h2>
+    <div id="shapes"></div>
+    <h2>Guides</h2>
+    <div class="acts"><button id="gSnap" type="button" class="on">Snap</button><button id="gSize" type="button" class="on">Size guide</button></div>
+    <p id="msg" role="status"></p>
+  </div>
+  <div id="view">
+    <div class="modes"><button id="mdT" type="button" class="on">Move <kbd>1</kbd></button><button id="mdR" type="button">Turn <kbd>2</kbd></button><button id="mdS" type="button">Stretch <kbd>3</kbd></button><button id="bUndo" type="button">Undo</button></div>
+    <div class="hint">Drag to look around · scroll to zoom · right-drag to slide · click a part to pick it · the amber arrow points to the FRONT · 1 square = 1 metre</div>
+  </div>
+  <div class="side">
+    <h2>Selected part</h2>
+    <div id="none">Click a part on the bench, or add a shape.</div>
+    <div id="insp" hidden>
+      <div class="row"><span>Where</span><input id="px" type="number" step="0.05" aria-label="Position left-right"><input id="py" type="number" step="0.05" aria-label="Position up-down"><input id="pz" type="number" step="0.05" aria-label="Position front-back"></div>
+      <div class="row"><span>Size</span><input id="sx" type="number" step="0.05" min="0.01" aria-label="Width"><input id="sy" type="number" step="0.05" min="0.01" aria-label="Height"><input id="sz" type="number" step="0.05" min="0.01" aria-label="Length"></div>
+      <div class="row"><span>Turn°</span><input id="rx" type="number" step="5" aria-label="Tilt"><input id="ry" type="number" step="5" aria-label="Spin"><input id="rz" type="number" step="5" aria-label="Roll"></div>
+      <div class="row"><span>Colour</span><input id="pc" type="color" aria-label="Colour" style="grid-column:span 1;padding:0;height:28px"><select id="pm" aria-label="Finish" style="grid-column:span 2"><option value="paint">Paint</option><option value="matte">Matte</option><option value="metal">Metal</option><option value="glass">Glass</option><option value="glow">Glowing</option></select></div>
+      <div class="sw" id="sw"></div>
+      <div class="acts"><button id="aDup" type="button">Copy</button><button id="aMir" type="button">Mirror copy</button><button id="aDrop" type="button">Sit on ground</button><button id="aDel" type="button" class="warn">Delete</button></div>
+    </div>
+    <h2>Parts <span id="cnt"></span></h2>
+    <ul id="list"></ul>
+  </div>
+</div>
+<dialog id="dlg"><h3 id="dT"></h3><p id="dP"></p><textarea id="dA" spellcheck="false"></textarea><div class="acts" style="margin-top:10px"><button id="dOk" type="button" class="on"></button><button id="dNo" type="button">Close</button></div></dialog>
+<dialog id="tpl"><h3>Start from…</h3><p>This replaces what is on the bench. Save first if you want to keep it.</p><div class="acts" id="tplB"></div><div class="acts" style="margin-top:10px"><button id="tNo" type="button">Cancel</button></div></dialog>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+<script>
+const MB_SHAPES={box:'Box',cyl:'Cylinder',cone:'Cone',sphere:'Ball',dome:'Dome',wedge:'Roof',ramp:'Ramp',pyramid:'Pyramid',nose:'Nose cone',wing:'Wing',wheel:'Wheel',ring:'Ring'};
+const mbCache={};
+function mbGeo(t){if(mbCache[t])return mbCache[t];let g;
+  const prism=pts=>{const sh=new THREE.Shape();pts.forEach((q,i)=>i?sh.lineTo(q[0],q[1]):sh.moveTo(q[0],q[1]));sh.closePath();return new THREE.ExtrudeGeometry(sh,{depth:1,bevelEnabled:false}).translate(0,0,-.5)};
+  if(t==='cyl')g=new THREE.CylinderGeometry(.5,.5,1,28);
+  else if(t==='cone')g=new THREE.ConeGeometry(.5,1,28);
+  else if(t==='sphere')g=new THREE.SphereGeometry(.5,28,18);
+  else if(t==='dome')g=new THREE.SphereGeometry(.5,28,12,0,6.2832,0,1.5708).translate(0,-.25,0).scale(1,2,1);
+  else if(t==='wedge')g=prism([[-.5,-.5],[.5,-.5],[0,.5]]);
+  else if(t==='ramp')g=prism([[-.5,-.5],[.5,-.5],[-.5,.5]]).rotateY(Math.PI/2);
+  else if(t==='pyramid')g=new THREE.ConeGeometry(.7071,1,4).rotateY(Math.PI/4);
+  else if(t==='nose'){const P=[];for(let i=0;i<=16;i++){const u=i/16;P.push(new THREE.Vector2(Math.max(.5*Math.sqrt(1-u*u),.001),u))}g=new THREE.LatheGeometry(P,28).rotateX(-Math.PI/2).translate(0,0,.5)}
+  else if(t==='wing'){const up=[],lo=[];for(let i=0;i<=18;i++){const u=i/18,x=u*u,y=2.5*(.2969*Math.sqrt(x)-.126*x-.3516*x*x+.2843*x*x*x-.1036*x*x*x*x);up.push([x-.5,y]);lo.push([x-.5,-y])}
+    g=prism([...up,...lo.reverse().slice(1,-1)]).rotateY(-Math.PI/2)}
+  else if(t==='wheel')g=new THREE.CylinderGeometry(.5,.5,1,28).rotateZ(Math.PI/2);
+  else if(t==='ring')g=new THREE.TorusGeometry(.38,.12,12,32).rotateY(Math.PI/2);
+  else g=new THREE.BoxGeometry(1,1,1);
+  g.computeVertexNormals();return mbCache[t]=g}
+function mbMat(c,m){const col=new THREE.Color(c);
+  if(m==='glass')return new THREE.MeshStandardMaterial({color:col,roughness:.06,metalness:.6,transparent:true,opacity:.55});
+  if(m==='glow')return new THREE.MeshBasicMaterial({color:col});
+  return new THREE.MeshStandardMaterial({color:col,roughness:m==='metal'?.28:m==='matte'?.92:.45,metalness:m==='metal'?.85:0})}
+function mbBuild(model){const G=new THREE.Group();for(const q of (model.parts||[]).slice(0,400)){const o=new THREE.Mesh(mbGeo(q.t),mbMat(q.c||'#cccccc',q.m));
+    o.position.set(+q.p[0]||0,+q.p[1]||0,+q.p[2]||0);o.rotation.set((+q.r[0]||0)*Math.PI/180,(+q.r[1]||0)*Math.PI/180,(+q.r[2]||0)*Math.PI/180);o.scale.set(+q.s[0]||.01,+q.s[1]||.01,+q.s[2]||.01);o.castShadow=o.receiveShadow=true;G.add(o)}return G}
+
+const $=id=>document.getElementById(id),say=t=>{$('msg').textContent=t;clearTimeout(say.t);say.t=setTimeout(()=>$('msg').textContent='',4000)};
+const P=(t,p,s,c,m,r)=>({t,p,r:r||[0,0,0],s,c,m:m||'paint'});
+// starting points, all marked as examples
+const TEMPLATES={
+ 'Example plane':{name:'Example plane',kind:'plane',parts:[P('box',[0,1.25,.6],[1.1,1.15,4.2],'#f4f4f0'),P('nose',[0,1.2,-2.2],[1.05,1.0,1.4],'#f4f4f0'),P('cone',[0,1.4,4.3],[.8,3.4,.7],'#f4f4f0','paint',[90,0,0]),
+   P('wing',[0,1.95,.1],[10.6,.2,1.6],'#1f5fbf'),P('wing',[0,1.6,5.4],[3.6,.12,1],'#1f5fbf'),P('ramp',[0,2.2,5.3],[.12,1.5,1.3],'#1f5fbf'),P('box',[0,1.62,-.35],[1.02,.5,1.5],'#17222c','glass'),
+   P('cone',[0,1.2,-3.1],[.4,.5,.4],'#c9ced3','metal',[-90,0,0]),P('box',[0,1.2,-3.0],[.12,2,.05],'#1b1e22','matte'),
+   P('wheel',[0,.25,-1.7],[.14,.5,.5],'#15171a','matte'),P('wheel',[-1.2,.28,.9],[.16,.56,.56],'#15171a','matte'),P('wheel',[1.2,.28,.9],[.16,.56,.56],'#15171a','matte'),
+   P('cyl',[0,.6,-1.7],[.08,.8,.08],'#c9ced3','metal'),P('box',[-.75,.6,.9],[1.1,.08,.25],'#f4f4f0','paint',[0,0,28]),P('box',[.75,.6,.9],[1.1,.08,.25],'#f4f4f0','paint',[0,0,-28])]},
+ 'Example house':{name:'Example house',kind:'building',parts:[P('box',[0,1.6,0],[7,3.2,9],'#efe6d2','matte'),P('wedge',[0,4.3,0],[7.6,2.2,9.4],'#a8452f','matte'),P('box',[0,1.1,-4.52],[1.1,2.2,.1],'#5a3a26','matte'),
+   P('box',[-2,1.9,-4.52],[1.2,1.2,.1],'#17222c','glass'),P('box',[2,1.9,-4.52],[1.2,1.2,.1],'#17222c','glass'),P('box',[2,4.9,2],[.8,1.8,.8],'#8a4a3a','matte')]},
+ 'Example hangar':{name:'Example hangar',kind:'building',parts:[P('box',[0,3,0],[18,6,16],'#dfe3e6','matte'),P('cyl',[0,6,0],[18,16,5],'#f3f4f2','paint',[90,0,0]),P('box',[0,2.6,-8.02],[13,5.2,.12],'#3a6ea8','metal'),P('box',[0,.05,-12],[18,.1,8],'#8d9296','matte')]},
+ 'Empty bench':{name:'My model',kind:'plane',parts:[]}};
+let model=JSON.parse(JSON.stringify(TEMPLATES['Example plane'])),sel=-1,undo=[],snap=true,guide=true;
+
+// ---------- 3D bench ----------
+const view=$('view'),renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.shadowMap.enabled=true;view.insertBefore(renderer.domElement,view.firstChild);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x16212b);
+const cam=new THREE.PerspectiveCamera(45,1,.1,500);cam.position.set(9,6,-11);
+const orbit=new THREE.OrbitControls(cam,renderer.domElement);orbit.target.set(0,1.2,.5);orbit.enableDamping=true;orbit.maxPolarAngle=1.56;
+scene.add(new THREE.HemisphereLight(0xcfe3ff,0x47525c,.85));const sun=new THREE.DirectionalLight(0xfff2dc,1.05);sun.position.set(8,14,-6);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+{const c=sun.shadow.camera;c.left=c.bottom=-22;c.right=c.top=22;c.far=60}scene.add(sun);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,80).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:0x22313f,roughness:.95}));floor.receiveShadow=true;floor.position.y=-.002;scene.add(floor);
+const grid=new THREE.GridHelper(80,80,0x4aa3ff,0x35495c);grid.position.y=.001;scene.add(grid);
+const arrow=new THREE.ArrowHelper(new THREE.Vector3(0,0,-1),new THREE.Vector3(0,.02,-6.5),2.5,0xffb84a,.8,.5);scene.add(arrow);
+const guides=new THREE.Group();scene.add(guides);
+function drawGuides(){while(guides.children.length)guides.remove(guides.children[0]);if(!guide)return;
+  const man=new THREE.Group(),gm=new THREE.MeshStandardMaterial({color:0xffb84a,roughness:.8});const b=(w,h,d,y)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),gm);o.position.y=y;man.add(o)};b(.3,.85,.2,.425);b(.42,.65,.25,1.17);b(.24,.26,.24,1.65);
+  man.position.set(model.kind==='plane'?6.5:-7,0,-3);guides.add(man); // a 1.8 m person for scale
+  if(model.kind==='plane'){const bx=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(11,2.8,8.8)),new THREE.LineBasicMaterial({color:0x5f7a92}));bx.position.set(0,1.4,.9);guides.add(bx)}}
+const parts=new THREE.Group();scene.add(parts);
+const tc=new THREE.TransformControls(cam,renderer.domElement);scene.add(tc);tc.setSize(.9);
+tc.addEventListener('dragging-changed',e=>{orbit.enabled=!e.value;if(e.value)push();else{readBack();fill()}});
+tc.addEventListener('objectChange',()=>{readBack();fillNums()});
+function applySnap(){tc.setTranslationSnap(snap?.05:null);tc.setRotationSnap(snap?Math.PI/36:null);tc.setScaleSnap(snap?.05:null)}
+function rebuild(){tc.detach();while(parts.children.length)parts.remove(parts.children[0]);const G=mbBuild(model);while(G.children.length)parts.add(G.children[0]);
+  if(sel>=parts.children.length)sel=-1;if(sel>=0)tc.attach(parts.children[sel]);drawGuides();fill()}
+function readBack(){if(sel<0)return;const o=parts.children[sel],q=model.parts[sel],r=v=>Math.round(v*1000)/1000,d=v=>Math.round(v*180/Math.PI*10)/10;
+  q.p=[r(o.position.x),r(o.position.y),r(o.position.z)];q.r=[d(o.rotation.x),d(o.rotation.y),d(o.rotation.z)];q.s=[r(Math.max(Math.abs(o.scale.x),.01)),r(Math.max(Math.abs(o.scale.y),.01)),r(Math.max(Math.abs(o.scale.z),.01))]}
+function push(){undo.push(JSON.stringify(model));if(undo.length>60)undo.shift()}
+function pick(i){sel=i;tc.detach();if(i>=0&&parts.children[i])tc.attach(parts.children[i]);fill()}
+
+// ---------- panels ----------
+const NUM=['px','py','pz','sx','sy','sz','rx','ry','rz'];
+function fillNums(){if(sel<0)return;const q=model.parts[sel],v=[...q.p,...q.s,...q.r];NUM.forEach((id,i)=>{if(document.activeElement!==$(id))$(id).value=v[i]})}
+function fill(){const q=model.parts[sel];$('insp').hidden=!q;$('none').hidden=!!q;if(q){fillNums();$('pc').value=q.c;$('pm').value=q.m}
+  $('cnt').textContent='('+model.parts.length+')';const ul=$('list');ul.textContent='';
+  model.parts.forEach((p,i)=>{const li=document.createElement('li'),sw=document.createElement('i');sw.style.background=p.c;li.append(sw,document.createTextNode((i+1)+'. '+(MB_SHAPES[p.t]||p.t)));if(i===sel)li.className='sel';li.onclick=()=>pick(i);ul.append(li)});
+  if(document.activeElement!==$('mName'))$('mName').value=model.name;$('mKind').value=model.kind}
+NUM.forEach((id,i)=>$(id).addEventListener('change',()=>{if(sel<0)return;const v=parseFloat($(id).value);if(!isFinite(v))return;push();const q=model.parts[sel];(i<3?q.p:i<6?q.s:q.r)[i%3]=i>=3&&i<6?Math.max(v,.01):v;rebuild()}));
+$('pc').addEventListener('input',()=>{if(sel<0)return;model.parts[sel].c=$('pc').value;parts.children[sel].material.color.set($('pc').value)});$('pc').addEventListener('change',()=>{push();fill()});
+$('pm').addEventListener('change',()=>{if(sel<0)return;push();model.parts[sel].m=$('pm').value;rebuild()});
+for(const c of['#f4f4f0','#17222c','#d8433a','#1f5fbf','#ffb84a','#2e8a57','#c9ced3','#8a4a3a','#efe6d2','#7a4f9a']){const b=document.createElement('button');b.type='button';b.style.background=c;b.title=c;b.setAttribute('aria-label','Colour '+c);b.onclick=()=>{if(sel<0)return;push();model.parts[sel].c=c;rebuild()};$('sw').append(b)}
+for(const t in MB_SHAPES){const b=document.createElement('button');b.type='button';b.textContent=MB_SHAPES[t];b.onclick=()=>{push();const big=model.kind==='building'?3:1;model.parts.push(P(t,[0,big/2,0],t==='wing'?[4,.15,1.2]:t==='wheel'?[.15,.5,.5]:[big,big,big],'#c9ced3'));sel=model.parts.length-1;rebuild()};$('shapes').append(b)}
+function setMode(m){tc.setMode(m);$('mdT').className=m==='translate'?'on':'';$('mdR').className=m==='rotate'?'on':'';$('mdS').className=m==='scale'?'on':''}
+$('mdT').onclick=()=>setMode('translate');$('mdR').onclick=()=>setMode('rotate');$('mdS').onclick=()=>setMode('scale');
+function doUndo(){if(!undo.length){say('Nothing to undo');return}model=JSON.parse(undo.pop());sel=-1;rebuild()}$('bUndo').onclick=doUndo;
+function dup(mirror){if(sel<0)return;push();const q=JSON.parse(JSON.stringify(model.parts[sel]));if(mirror){q.p[0]=-q.p[0];q.r[1]=-q.r[1];q.r[2]=-q.r[2];if(Math.abs(q.p[0])<.01)say('This part is on the centre line, so its mirror copy sits on top of it')}else{q.p[0]+=.5;q.p[2]+=.5}model.parts.push(q);sel=model.parts.length-1;rebuild()}
+$('aDup').onclick=()=>dup(false);$('aMir').onclick=()=>dup(true);
+function del(){if(sel<0)return;push();model.parts.splice(sel,1);sel=-1;rebuild()}$('aDel').onclick=del;
+$('aDrop').onclick=()=>{if(sel<0)return;push();const bb=new THREE.Box3().setFromObject(parts.children[sel]);model.parts[sel].p[1]=Math.round((model.parts[sel].p[1]-bb.min.y)*1000)/1000;rebuild()};
+$('gSnap').onclick=()=>{snap=!snap;$('gSnap').className=snap?'on':'';applySnap()};$('gSize').onclick=()=>{guide=!guide;$('gSize').className=guide?'on':'';drawGuides()};
+$('mName').addEventListener('input',()=>{model.name=$('mName').value});$('mKind').addEventListener('change',()=>{model.kind=$('mKind').value;drawGuides()});
+// click to pick (a drag is looking around, not a pick)
+{let dn=null;const ray=new THREE.Raycaster(),v=new THREE.Vector2();renderer.domElement.addEventListener('pointerdown',e=>{dn=[e.clientX,e.clientY]});
+ renderer.domElement.addEventListener('pointerup',e=>{if(!dn||Math.hypot(e.clientX-dn[0],e.clientY-dn[1])>5||tc.dragging)return;const r=renderer.domElement.getBoundingClientRect();v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(v,cam);
+   const h=ray.intersectObjects(parts.children);if(h.length)pick(parts.children.indexOf(h[0].object));else if(!tc.axis)pick(-1)})}
+addEventListener('keydown',e=>{const tag=(e.target.tagName||'');if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+  if((e.ctrlKey||e.metaKey)&&e.code==='KeyZ'){e.preventDefault();doUndo()}else if((e.ctrlKey||e.metaKey)&&e.code==='KeyD'){e.preventDefault();dup(false)}
+  else if(e.code==='Digit1')setMode('translate');else if(e.code==='Digit2')setMode('rotate');else if(e.code==='Digit3')setMode('scale');else if(e.code==='Delete'||e.code==='Backspace')del()});
+
+// ---------- saving (in this browser) and sharing with the game (as code) ----------
+const KEY='osw-models';let store={};try{store=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){store={}}
+function slots(){const s=$('mSlots');s.textContent='';const o=document.createElement('option');o.value='';o.textContent='My saved models…';s.append(o);for(const k of Object.keys(store).sort()){const p=document.createElement('option');p.value=k;p.textContent=k;s.append(p)}}
+$('bSave').onclick=()=>{const n=(model.name||'').trim();if(!n){say('Give the model a name first');return}store[n]=JSON.parse(JSON.stringify(model));try{localStorage.setItem(KEY,JSON.stringify(store));say('Saved "'+n+'" in this browser')}catch(e){say('Could not save here. Use Copy code to keep it safe.')}slots()};
+$('mSlots').addEventListener('change',()=>{const k=$('mSlots').value;if(!k||!store[k])return;push();model=JSON.parse(JSON.stringify(store[k]));sel=-1;rebuild();say('Opened "'+k+'"')});
+let delArm='';$('bDel').onclick=()=>{const k=$('mSlots').value;if(!k){say('Pick a saved model in the list first');return}if(delArm!==k){delArm=k;say('Press Delete saved again to remove "'+k+'" for good');return}delete store[k];delArm='';try{localStorage.setItem(KEY,JSON.stringify(store))}catch(e){}slots();say('Deleted "'+k+'"')};
+const code=()=>JSON.stringify({osw:1,name:model.name,kind:model.kind,parts:model.parts});
+function check(txt){let m;try{m=JSON.parse(txt)}catch(e){throw new Error('That is not model code. Copy it again from the Workshop.')}if(!m||!Array.isArray(m.parts))throw new Error('That code has no parts in it.');
+  return{name:String(m.name||'My model').slice(0,30),kind:['plane','building','other'].includes(m.kind)?m.kind:'other',parts:m.parts.slice(0,400).filter(q=>q&&MB_SHAPES[q.t]&&Array.isArray(q.p)&&Array.isArray(q.s)).map(q=>P(q.t,q.p.slice(0,3).map(Number),q.s.slice(0,3).map(Number),/^#[0-9a-f]{6}$/i.test(q.c)?q.c:'#cccccc',['paint','matte','metal','glass','glow'].includes(q.m)?q.m:'paint',(Array.isArray(q.r)?q.r:[0,0,0]).slice(0,3).map(Number)))}}
+const dlg=$('dlg');let dMode='';
+$('bExport').onclick=()=>{dMode='out';$('dT').textContent='Code for "'+model.name+'"';$('dP').textContent='In Open Skies press O for Settings, paste this into "My models", then choose Use as my plane or Place here.';$('dA').value=code();$('dA').readOnly=true;$('dOk').textContent='Copy';dlg.showModal();$('dA').select()};
+$('bImport').onclick=()=>{dMode='in';$('dT').textContent='Paste model code';$('dP').textContent='Paste code you copied from the Workshop earlier. It replaces what is on the bench.';$('dA').value='';$('dA').readOnly=false;$('dOk').textContent='Load it';dlg.showModal()};
+$('dNo').onclick=()=>dlg.close();
+$('dOk').onclick=()=>{if(dMode==='out'){const done=()=>{$('dP').textContent='Copied. Now paste it into Open Skies (Settings, My models).'};$('dA').select();
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText($('dA').value).then(done).catch(()=>{$('dP').textContent='Could not copy by itself. The code is selected: press Ctrl+C or Cmd+C.'});else $('dP').textContent='The code is selected: press Ctrl+C or Cmd+C.'}
+  else{try{const m=check($('dA').value);push();model=m;sel=-1;rebuild();dlg.close();say('Loaded "'+m.name+'"')}catch(e){$('dP').textContent=e.message}}};
+for(const k in TEMPLATES){const b=document.createElement('button');b.type='button';b.textContent=k;b.onclick=()=>{push();model=JSON.parse(JSON.stringify(TEMPLATES[k]));sel=-1;rebuild();$('tpl').close()};$('tplB').append(b)}
+$('bNew').onclick=()=>$('tpl').showModal();$('tNo').onclick=()=>$('tpl').close();
+
+function size(){const w=view.clientWidth,h=view.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+addEventListener('resize',size);if(window.ResizeObserver)new ResizeObserver(size).observe(view);
+function start(saved){if(saved&&saved.model){try{model=check(JSON.stringify(saved.model))}catch(e){}}applySnap();slots();size();rebuild();(function loop(){requestAnimationFrame(loop);orbit.update();renderer.render(scene,cam)})()}
+window.claude?.hot?.snapshot?.(()=>({model}));
+window.claude?.hot?.ready?window.claude.hot.ready(start):start(window.claude?.hot?.data??{});
+</script>
